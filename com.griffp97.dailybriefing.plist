@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.griffp97.dailybriefing</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/griffp97/opt/anaconda3/envs/py311/bin/python3</string>
+        <string>/Users/griffp97/DailyBrief/daily_briefing.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/griffp97/DailyBrief</string>
+
+    <!-- Run at 6:00 AM daily. launchd (unlike cron) will fire on next wake if Mac was asleep. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/griffp97/DailyBrief/briefing.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/griffp97/DailyBrief/briefing_error.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

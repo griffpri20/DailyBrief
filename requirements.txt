@@ -1,0 +1,7 @@
+requests
+python-dateutil
+google-auth
+google-auth-oauthlib
+google-api-python-client
+todoist-api-python
+pandas

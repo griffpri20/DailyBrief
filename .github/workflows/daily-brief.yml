@@ -1,0 +1,41 @@
+name: Daily Briefing
+
+on:
+  schedule:
+    # 12:30 UTC = 6:30 AM Chicago (CST, Nov–Mar)
+    # Change to 11:30 UTC after Mar 8 (CDT, Mar–Nov)
+    - cron: '30 12 * * *'
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  send-briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write secret files
+        env:
+          CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
+          TOKEN_CALENDAR_JSON: ${{ secrets.TOKEN_CALENDAR_JSON }}
+        run: |
+          echo "$CREDENTIALS_JSON" | base64 --decode > credentials.json
+          echo "$TOKEN_CALENDAR_JSON" | base64 --decode > token_calendar.json
+
+      - name: Run daily briefing
+        env:
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_CREDENTIALS_JSON: credentials.json
+          CITY_NAME: "Chicago, IL"
+        run: python daily_briefing.py

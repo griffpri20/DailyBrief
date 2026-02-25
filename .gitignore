@@ -1,0 +1,20 @@
+# Secrets — never commit these
+.env
+credentials.json
+token_calendar.json
+token_gmail.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+
+# Preview output
+daily_briefing_preview.html
+
+# macOS
+.DS_Store
