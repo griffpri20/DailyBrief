@@ -168,36 +168,20 @@ def _normalize_task(t):
 def get_todoist():
     try:
         api = TodoistAPI(CONFIG["TODOIST_TOKEN"])
-        raw = api.get_tasks()
-        flat = []
+        # Use Todoist's built-in filter to fetch all tasks due today or overdue
+        # from every project (not just Inbox).
+        raw = api.get_tasks(filter="today | overdue")
+        tasks = []
         for item in raw:
             if isinstance(item, list):
-                flat.extend(item)
+                for t in item:
+                    tasks.append(_normalize_task(t))
             else:
-                flat.append(item)
+                tasks.append(_normalize_task(item))
 
-        today = datetime.datetime.now().date()
-        due_today = []
-        no_due = []
-
-        for t in flat:
-            task = _normalize_task(t)
-            if task["due_date"]:
-                try:
-                    if parser.parse(task["due_date"]).date() <= today:
-                        due_today.append(task)
-                except Exception:
-                    pass
-            else:
-                no_due.append(task)
-
-        # Sort by priority descending
-        due_today.sort(key=lambda x: x["priority"], reverse=True)
-        no_due.sort(key=lambda x: x["priority"], reverse=True)
-
-        # Return up to 10 tasks: overdue/due-today first, then no-due-date tasks
-        combined = due_today + no_due
-        return combined[:10]
+        # Sort by priority descending (4=urgent … 1=normal in Todoist)
+        tasks.sort(key=lambda x: x["priority"], reverse=True)
+        return tasks
     except Exception as e:
         print(f"Todoist error: {e}")
         return []
