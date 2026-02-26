@@ -13,9 +13,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Third Party
-from todoist_api_python.api import TodoistAPI
-
 
 # --- 0. Environment Setup ---
 
@@ -167,20 +164,29 @@ def _normalize_task(t):
 
 def get_todoist():
     try:
-        api = TodoistAPI(CONFIG["TODOIST_TOKEN"])
-        # Use Todoist's built-in filter to fetch all tasks due today or overdue
-        # from every project (not just Inbox).
-        raw = api.get_tasks(filter="today | overdue")
+        token = CONFIG["TODOIST_TOKEN"]
+        if not token:
+            print("Todoist error: TODOIST_API_TOKEN not set")
+            return []
+        resp = requests.get(
+            "https://api.todoist.com/rest/v2/tasks",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"filter": "today | overdue"},
+            timeout=10,
+        )
+        resp.raise_for_status()
         tasks = []
-        for item in raw:
-            if isinstance(item, list):
-                for t in item:
-                    tasks.append(_normalize_task(t))
-            else:
-                tasks.append(_normalize_task(item))
-
+        for t in resp.json():
+            due = t.get("due") or {}
+            tasks.append({
+                "content": t.get("content", ""),
+                "priority": t.get("priority", 1),
+                "url": t.get("url", ""),
+                "due_date": due.get("date") if isinstance(due, dict) else None,
+            })
         # Sort by priority descending (4=urgent … 1=normal in Todoist)
         tasks.sort(key=lambda x: x["priority"], reverse=True)
+        print(f"Todoist: fetched {len(tasks)} task(s) due today/overdue")
         return tasks
     except Exception as e:
         print(f"Todoist error: {e}")
