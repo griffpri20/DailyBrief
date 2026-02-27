@@ -163,20 +163,25 @@ def _normalize_task(t):
 
 
 def get_todoist():
+    token = CONFIG["TODOIST_TOKEN"]
+    if not token:
+        print("Todoist error: TODOIST_API_TOKEN not set")
+        return [{"content": "⚠️ TODOIST_API_TOKEN secret is not configured", "priority": 4, "url": "", "due_date": None}]
     try:
-        token = CONFIG["TODOIST_TOKEN"]
-        if not token:
-            print("Todoist error: TODOIST_API_TOKEN not set")
-            return []
         resp = requests.get(
             "https://api.todoist.com/rest/v2/tasks",
             headers={"Authorization": f"Bearer {token}"},
             params={"filter": "today | overdue"},
             timeout=10,
         )
-        resp.raise_for_status()
+        print(f"Todoist API status: {resp.status_code}")
+        if not resp.ok:
+            print(f"Todoist API error body: {resp.text[:300]}")
+            resp.raise_for_status()
+        raw = resp.json()
+        print(f"Todoist: raw response has {len(raw)} task(s)")
         tasks = []
-        for t in resp.json():
+        for t in raw:
             due = t.get("due") or {}
             tasks.append({
                 "content": t.get("content", ""),
@@ -186,11 +191,11 @@ def get_todoist():
             })
         # Sort by priority descending (4=urgent … 1=normal in Todoist)
         tasks.sort(key=lambda x: x["priority"], reverse=True)
-        print(f"Todoist: fetched {len(tasks)} task(s) due today/overdue")
+        print(f"Todoist: returning {len(tasks)} task(s) due today/overdue")
         return tasks
     except Exception as e:
         print(f"Todoist error: {e}")
-        return []
+        return [{"content": f"⚠️ Todoist fetch failed: {e}", "priority": 4, "url": "", "due_date": None}]
 
 
 def get_calendar():
