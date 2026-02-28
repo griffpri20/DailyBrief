@@ -42,7 +42,7 @@ print()
 # ── Test 1: basic connectivity ────────────────────────────────────────────────
 print("=== Test 1: GET /rest/v2/tasks?filter=today|overdue ===")
 resp = requests.get(
-    "https://api.todoist.com/rest/v2/tasks",
+    "https://api.todoist.com/api/v1/tasks",
     headers={"Authorization": f"Bearer {token}"},
     params={"filter": "today | overdue"},
     timeout=10,
@@ -75,7 +75,7 @@ else:
 print()
 print("=== Test 2: GET /rest/v2/projects (auth sanity check) ===")
 resp2 = requests.get(
-    "https://api.todoist.com/rest/v2/projects",
+    "https://api.todoist.com/api/v1/projects",
     headers={"Authorization": f"Bearer {token}"},
     timeout=10,
 )

@@ -169,7 +169,7 @@ def get_todoist():
         return [{"content": "⚠️ TODOIST_API_TOKEN secret is not configured", "priority": 4, "url": "", "due_date": None}]
     try:
         resp = requests.get(
-            "https://api.todoist.com/rest/v2/tasks",
+            "https://api.todoist.com/api/v1/tasks",
             headers={"Authorization": f"Bearer {token}"},
             params={"filter": "today | overdue"},
             timeout=10,
