@@ -182,14 +182,24 @@ def get_todoist():
         # API v1 wraps the list: {"results": [...], "next_cursor": ...}
         task_list = raw.get("results", raw) if isinstance(raw, dict) else raw
         print(f"Todoist: raw response has {len(task_list)} task(s)")
+        today = datetime.date.today()
         tasks = []
         for t in task_list:
             due = t.get("due") or {}
+            due_date_str = due.get("date") if isinstance(due, dict) else None
+            # Keep only tasks due today or overdue; skip future and no-due-date tasks
+            if not due_date_str:
+                continue
+            try:
+                if datetime.date.fromisoformat(due_date_str[:10]) > today:
+                    continue
+            except (ValueError, TypeError):
+                continue
             tasks.append({
                 "content": t.get("content", ""),
                 "priority": t.get("priority", 1),
                 "url": t.get("url", ""),
-                "due_date": due.get("date") if isinstance(due, dict) else None,
+                "due_date": due_date_str[:10],
             })
         # Sort by priority descending (4=urgent … 1=normal in Todoist)
         tasks.sort(key=lambda x: x["priority"], reverse=True)
