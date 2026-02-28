@@ -54,7 +54,9 @@ if not resp.ok:
     print(f"Body: {resp.text[:500]}")
     sys.exit(1)
 
-tasks = resp.json()
+raw = resp.json()
+# API v1 wraps the list: {"results": [...], "next_cursor": ...}
+tasks = raw.get("results", raw) if isinstance(raw, dict) else raw
 print(f"Tasks found : {len(tasks)}")
 
 today_str = datetime.date.today().isoformat()

@@ -179,9 +179,11 @@ def get_todoist():
             print(f"Todoist API error body: {resp.text[:300]}")
             resp.raise_for_status()
         raw = resp.json()
-        print(f"Todoist: raw response has {len(raw)} task(s)")
+        # API v1 wraps the list: {"results": [...], "next_cursor": ...}
+        task_list = raw.get("results", raw) if isinstance(raw, dict) else raw
+        print(f"Todoist: raw response has {len(task_list)} task(s)")
         tasks = []
-        for t in raw:
+        for t in task_list:
             due = t.get("due") or {}
             tasks.append({
                 "content": t.get("content", ""),
