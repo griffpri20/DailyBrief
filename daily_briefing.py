@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import smtplib
 import datetime
 import xml.etree.ElementTree as ET
@@ -168,13 +169,20 @@ def get_todoist():
         print("Todoist error: TODOIST_API_TOKEN not set")
         return [{"content": "⚠️ TODOIST_API_TOKEN secret is not configured", "priority": 4, "url": "", "due_date": None}]
     try:
-        resp = requests.get(
-            "https://api.todoist.com/api/v1/tasks",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"filter": "today | overdue"},
-            timeout=10,
-        )
-        print(f"Todoist API status: {resp.status_code}")
+        resp = None
+        for attempt in range(1, 4):
+            resp = requests.get(
+                "https://api.todoist.com/api/v1/tasks",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"filter": "today | overdue"},
+                timeout=10,
+            )
+            print(f"Todoist API status: {resp.status_code} (attempt {attempt})")
+            if resp.status_code < 500:
+                break
+            print(f"Todoist API error body: {resp.text[:300]}")
+            if attempt < 3:
+                time.sleep(2 ** attempt)  # 2s, 4s
         if not resp.ok:
             print(f"Todoist API error body: {resp.text[:300]}")
             resp.raise_for_status()
