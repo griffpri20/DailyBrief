@@ -70,8 +70,12 @@ def get_google_service(name, version, token_file):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except Exception as refresh_err:
+                print(f"Token refresh failed ({refresh_err}), re-authenticating...")
+                creds = None
+        if not creds or not creds.valid:
             flow = InstalledAppFlow.from_client_secrets_file(CONFIG["GMAIL_CREDS"], SCOPES)
             creds = flow.run_local_server(port=0)
         with open(token_path, "w") as token:
@@ -171,18 +175,26 @@ def get_todoist():
     try:
         resp = None
         for attempt in range(1, 4):
-            resp = requests.get(
-                "https://api.todoist.com/api/v1/tasks",
-                headers={"Authorization": f"Bearer {token}"},
-                params={"filter": "today | overdue"},
-                timeout=10,
-            )
+            try:
+                resp = requests.get(
+                    "https://api.todoist.com/api/v1/tasks",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"filter": "today | overdue"},
+                    timeout=20,
+                )
+            except requests.exceptions.Timeout:
+                print(f"Todoist timeout on attempt {attempt}")
+                if attempt < 3:
+                    time.sleep(2 ** attempt)
+                continue
             print(f"Todoist API status: {resp.status_code} (attempt {attempt})")
             if resp.status_code < 500:
                 break
             print(f"Todoist API error body: {resp.text[:300]}")
             if attempt < 3:
                 time.sleep(2 ** attempt)  # 2s, 4s
+        if resp is None:
+            raise Exception("All 3 Todoist attempts timed out")
         if not resp.ok:
             print(f"Todoist API error body: {resp.text[:300]}")
             resp.raise_for_status()
