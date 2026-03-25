@@ -2,10 +2,13 @@ name: Daily Briefing
 
 on:
   schedule:
-    # 12:30 UTC = 6:30 AM Chicago (CST, Nov–Mar)
-    # Change to 11:30 UTC after Mar 8 (CDT, Mar–Nov)
-    - cron: '30 12 * * *'
+    # 11:30 UTC = 6:30 AM Chicago (CDT, Mar–Nov)
+    # Change to 12:30 UTC after Nov 2 (CST, Nov–Mar)
+    - cron: '30 11 * * *'
   workflow_dispatch: # allows manual trigger from GitHub UI
+
+permissions:
+  contents: write
 
 jobs:
   send-briefing:
@@ -38,4 +41,13 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_CREDENTIALS_JSON: credentials.json
           CITY_NAME: "Chicago, IL"
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
         run: python daily_briefing.py
+
+      - name: Publish to GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git commit -m "Daily briefing $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          git push

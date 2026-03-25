@@ -471,14 +471,20 @@ def build_html(data):
     return html
 
 
-# --- 3. Send Email ---
+# --- 3. Save HTML & (optionally) Send Email ---
+
+def save_html(html_content):
+    docs_dir = os.path.join(SCRIPT_DIR, "docs")
+    os.makedirs(docs_dir, exist_ok=True)
+    index_path = os.path.join(docs_dir, "index.html")
+    with open(index_path, "w") as f:
+        f.write(html_content)
+    print(f"Briefing saved to {index_path}")
+
 
 def send_email(html_content):
     if not CONFIG["GMAIL_APP_PWD"]:
-        preview_path = os.path.join(SCRIPT_DIR, "daily_briefing_preview.html")
-        with open(preview_path, "w") as f:
-            f.write(html_content)
-        print(f"No App Password found. Preview saved to {preview_path}")
+        print("No App Password found. Skipping email.")
         return
 
     msg = MIMEText(html_content, "html")
@@ -489,10 +495,168 @@ def send_email(html_content):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(CONFIG["EMAIL"], CONFIG["GMAIL_APP_PWD"])
         server.send_message(msg)
-    print("Briefing sent successfully.")
+    print("Briefing sent via email.")
 
 
-# --- 4. Main ---
+# --- 4. Write to Notion ---
+
+NOTION_PAGE_ID = "32d4f6d1d79381e9bbe3e872cf32ae71"
+
+
+def _notion_headers():
+    return {
+        "Authorization": f"Bearer {os.getenv('NOTION_TOKEN')}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
+
+
+def _clear_notion_page(page_id, headers):
+    resp = requests.get(
+        f"https://api.notion.com/v1/blocks/{page_id}/children",
+        headers=headers,
+        timeout=10,
+    )
+    for block in resp.json().get("results", []):
+        requests.delete(
+            f"https://api.notion.com/v1/blocks/{block['id']}",
+            headers=headers,
+            timeout=10,
+        )
+
+
+def _txt(content, bold=False, color="default", url=None):
+    text = {"type": "text", "text": {"content": content}}
+    if url:
+        text["text"]["link"] = {"url": url}
+    if bold or color != "default":
+        text["annotations"] = {}
+        if bold:
+            text["annotations"]["bold"] = True
+        if color != "default":
+            text["annotations"]["color"] = color
+    return text
+
+
+def build_notion_blocks(data):
+    w = data["weather"]
+    today = datetime.datetime.now().strftime("%A, %B %d")
+    today_str = datetime.date.today().isoformat()
+    blocks = []
+
+    # Header
+    blocks.append({"object": "block", "type": "heading_1", "heading_1": {
+        "rich_text": [_txt(f"Good morning, Griff ☀️")]
+    }})
+    wind_note = f" | 💨 {w['wind']} mph" if isinstance(w["wind"], (int, float)) and w["wind"] > 15 else ""
+    blocks.append({"object": "block", "type": "callout", "callout": {
+        "rich_text": [_txt(f"📍 {CONFIG['CITY']}  |  {w['temp']}°F (feels {w['feels']}°)  |  ↑{w['high']}° / ↓{w['low']}°  |  {w['desc']}{wind_note}")],
+        "icon": {"type": "emoji", "emoji": "🌤️"},
+    }})
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {
+        "rich_text": [_txt(today, color="gray")]
+    }})
+
+    # Tasks
+    blocks.append({"object": "block", "type": "heading_2", "heading_2": {
+        "rich_text": [_txt("✅  Today's Tasks")]
+    }})
+    for t in data["todoist"]:
+        overdue = t.get("due_date") and t["due_date"] < today_str
+        label = t["content"] + (" (overdue)" if overdue else "")
+        blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {
+            "rich_text": [_txt(label, color="red" if overdue else "default")]
+        }})
+
+    # Calendar
+    blocks.append({"object": "block", "type": "heading_2", "heading_2": {
+        "rich_text": [_txt("📅  Calendar")]
+    }})
+    for e in data["calendar"]:
+        start = e.get("start", {})
+        start_raw = start.get("dateTime", start.get("date", ""))
+        try:
+            dt = parser.parse(start_raw)
+            start_fmt = dt.strftime("%-m/%-d %I:%M %p") if "T" in start_raw else dt.strftime("%-m/%-d (all day)")
+        except Exception:
+            start_fmt = start_raw
+        cal_name = e.get("_calendar_name", "")
+        cal_badge = f"  [{cal_name}]" if cal_name else ""
+        blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {
+            "rich_text": [
+                _txt(e.get("summary", "Untitled"), bold=True),
+                _txt(f"  —  {start_fmt}{cal_badge}", color="gray"),
+            ]
+        }})
+
+    # News
+    blocks.append({"object": "block", "type": "heading_2", "heading_2": {
+        "rich_text": [_txt("📰  News Highlights")]
+    }})
+    for label, items in data["news"].items():
+        blocks.append({"object": "block", "type": "paragraph", "paragraph": {
+            "rich_text": [_txt(label, bold=True)]
+        }})
+        for item in items:
+            blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {
+                "rich_text": [_txt(item["headline"], url=item.get("url") or None)]
+            }})
+
+    # Mobility
+    routine, prog = data["mobility"]
+    routine_text = re.sub(r"<[^>]+>", "", routine).replace("&mdash;", "—")
+    blocks.append({"object": "block", "type": "heading_2", "heading_2": {
+        "rich_text": [_txt("🏋️  Mobility Routine")]
+    }})
+    blocks.append({"object": "block", "type": "callout", "callout": {
+        "rich_text": [_txt(f"{prog}\n\n{routine_text}")],
+        "icon": {"type": "emoji", "emoji": "💪"},
+    }})
+
+    # Footer
+    blocks.append({"object": "block", "type": "paragraph", "paragraph": {
+        "rich_text": [_txt(f"Generated {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} UTC", color="gray")]
+    }})
+
+    return blocks
+
+
+def write_to_notion(data):
+    token = os.getenv("NOTION_TOKEN")
+    if not token:
+        print("NOTION_TOKEN not set. Skipping Notion write.")
+        return
+
+    headers = _notion_headers()
+    print("Clearing existing Notion page content...")
+    _clear_notion_page(NOTION_PAGE_ID, headers)
+
+    blocks = build_notion_blocks(data)
+
+    # Notion API max 100 blocks per request
+    for i in range(0, len(blocks), 100):
+        batch = blocks[i:i + 100]
+        resp = requests.patch(
+            f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
+            headers=headers,
+            json={"children": batch},
+            timeout=15,
+        )
+        if not resp.ok:
+            print(f"Notion API error: {resp.text[:300]}")
+            return
+
+    # Update page title with today's date
+    requests.patch(
+        f"https://api.notion.com/v1/pages/{NOTION_PAGE_ID}",
+        headers=headers,
+        json={"properties": {"title": {"title": [{"text": {"content": f"☀️ Daily Briefing — {datetime.datetime.now().strftime('%B %d, %Y')}"}}]}}},
+        timeout=10,
+    )
+    print(f"Briefing written to Notion: https://www.notion.so/{NOTION_PAGE_ID}")
+
+
+# --- 5. Main ---
 
 if __name__ == "__main__":
     print("Fetching data...")
@@ -503,5 +667,8 @@ if __name__ == "__main__":
         "calendar": get_calendar(),
         "news": get_news(),
     }
-    print("Building and sending email...")
-    send_email(build_html(payload))
+    print("Building briefing...")
+    html = build_html(payload)
+    save_html(html)
+    send_email(html)
+    write_to_notion(payload)
