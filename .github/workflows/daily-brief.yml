@@ -1,9 +1,7 @@
 name: Daily Briefing
 
 on:
-  schedule:
-    - cron: '30 11 * * *'  # 6:30 AM Chicago (CDT/UTC-5). Change to '30 12 * * *' Nov–Mar (CST/UTC-6).
-  workflow_dispatch:
+  workflow_dispatch: # disabled — daily briefing runs via Claude scheduled task
 
 permissions:
   contents: write
