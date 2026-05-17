@@ -13,8 +13,10 @@ __pycache__/
 dist/
 build/
 
-# Preview output
+# Preview output + runtime logs
 daily_briefing_preview.html
+*.log
+Untitled.sql
 
 # macOS
 .DS_Store
